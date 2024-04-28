@@ -59,6 +59,8 @@ int sort_openmp(int* array, int n) {
 }
 
 
+
+
 void fill_array(int *array, int n) {
     int i;
     

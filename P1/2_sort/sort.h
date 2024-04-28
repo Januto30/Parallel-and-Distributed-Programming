@@ -8,5 +8,7 @@
 int sort(int *array, int n);
 int sort_openmp(int *array, int n);
 void fill_array(int *array, int n);
+int is_sorted(int *array, int n);
+
 
 #endif

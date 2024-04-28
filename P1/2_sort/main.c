@@ -32,6 +32,7 @@ int main(int argc, char* argv[]) {
     end=omp_get_wtime();
     time_seq = end-start;
     printf("Sequential: %f sec\n",time_seq);
+
     
     fill_array(array, n);
     
@@ -39,6 +40,19 @@ int main(int argc, char* argv[]) {
     sort_openmp(array, n);
     end=omp_get_wtime();
     time_omp = end-start;
+
+    //MIREM SI L'ARRAY ESTA ORDENAT CORRECTAMENT, IMPRIMIM ARRAY
+    if(is_sorted(array, n)) {
+        printf("Array is sorted correctly.\n");
+    } else {
+        printf("Array is not sorted correctly.\n");
+    }
+    /*
+    for(int i = 0; i < n; i++) {
+        printf("%d ", array[i]);
+    }
+    printf("\n");*/
+
     printf("OpenMP: %f sec\n",time_omp);
     
     printf("OpenMP was %f times faster\n",time_seq/time_omp);
