@@ -6,16 +6,33 @@
 #define N 1024    // number of matrix rows will be N*N
 #define ROWSIZE 9 // number of nonzero cols of sparse matrix
 
+//m     -> número de files = vec_size
+//r     -> número de non-zeros per fila = ROWSIZE
+//vals  -> emmagatzemem els valors que són non-zero = Avals
+//cols  -> emmagatzemem els índex dels non-zero = Acols
+//x     -> input array amb n components = x
+//y     -> output array amb m components = y_cpu
+//n     -> número de columnes
+
 void spmv_cpu(int m, int r, double* vals, int* cols, double* x, double* y)
 {
-
+    for(int i = 0; i < m; i++) {
+        y[i] = 0.0;   
+        for(int j = 0; j < r; j++){
+            y[i] += vals[j + i*r]*x[cols[j + i*r]]; // (j + i*r) calcula l'index del element (si no s'enten fer a paper per veure que si funciona)
+        }
+    }
 }
 
-void spmv_gpu(int m, int r, double* vals, int* cols, double* x, double* y)
-{
-
+void spmv_gpu(int m, int r, double* vals, int* cols, double* x, double* y){
+    #pragma acc parallel loop present(vals[0:m*r], cols[0:m*r], x[0:m], y[0:m])
+    for(int i = 0; i < m; i++) {
+        y[i] = 0.0;   
+        for(int j = 0; j < r; j++){
+            y[i] += vals[j + i*r]*x[cols[j + i*r]]; // (j + i*r) calcula l'index del element (si no s'enten fer a paper per veure que si funciona)
+        }
+    }
 }
-
 
 void fill_matrix(double* vals, int* cols)
 {
@@ -75,8 +92,6 @@ int main()
     double* Avals = (double*) malloc (ROWSIZE*vec_size*sizeof(double));
     int* Acols = (int*) malloc (ROWSIZE*vec_size*sizeof(int));
 
-
-
     // fill vector with sinusoidal for testing the code
     for(int i = 0; i < vec_size; i++)
     {
@@ -86,36 +101,36 @@ int main()
     }
 
     fill_matrix(Avals, Acols);
-
-
+    
+    //CPU-VERSION----------------------------------------------------------------------------------------------
     time_start = omp_get_wtime();
-
     for(int i = 0; i < 100; i++)
         spmv_cpu(vec_size, ROWSIZE, Avals, Acols, x, y_cpu);
-
     time_end = omp_get_wtime();
     time_cpu = time_end - time_start;
+    //---------------------------------------------------------------------------------------------------------
 
-
+    //GPU-VERSION----------------------------------------------------------------------------------------------
+    #pragma acc enter data copyin(x[0:vec_size], Avals[0:vec_size*ROWSIZE], Acols[0:vec_size*ROWSIZE], y_gpu[0:vec_size]) 
+                                                            //x[0:vec_size]             -> copia vec_size elements de x a la GPU
+                                                            //Avals[0:vec_size*ROWSIZE] -> copia vec_size*ROWSIZE elements de Avals a la GPU
+                                                            //Acols[0:vec_size*ROWSIZE] -> copia vec_size*ROWSIZE elements de Acols a la GPU
+                                                            //y_gpu[0:vec_size]         -> copia vec_size elements de y_gpu a la GPU
     time_start = omp_get_wtime();
-
     for(int i = 0; i < 100; i++)
         spmv_gpu(vec_size, ROWSIZE, Avals, Acols, x, y_gpu);
-
     time_end = omp_get_wtime();
+    #pragma acc exit data copyout(y_gpu[0:vec_size])
     time_gpu = time_end - time_start;
-
-
+    //---------------------------------------------------------------------------------------------------------
 
     // compare gpu and cpu results
     double norm2 = 0.0;
     for(int i = 0; i < vec_size; i++)
         norm2 += (y_cpu[i] - y_gpu[i])*(y_cpu[i] - y_gpu[i]);
-
     norm2 = sqrt(norm2);
 
-    printf("spmv comparison cpu vs gpu error: %e, size %d\n",
-           norm2, vec_size);
+    printf("spmv comparison cpu vs gpu error: %e, size %d\n",norm2, vec_size);
 
     printf("CPU Time: %lf\n", time_cpu);
     printf("GPU Time: %lf\n", time_gpu);

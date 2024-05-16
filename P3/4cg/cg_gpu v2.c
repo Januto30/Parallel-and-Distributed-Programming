@@ -47,8 +47,6 @@ double dot_product_gpu(int n, double* x, double* y)
     return dot;
 }
 
-
-
 void fill_matrix(double* vals, int* cols)
 {
 
@@ -94,7 +92,6 @@ void fill_matrix(double* vals, int* cols)
     vals[4 + (N*N/2 + N/2)*ROWSIZE] =  1.001*vals[4 + (N*N/2 + N/2)*ROWSIZE];
 }
 
-
 void create_solution_and_rhs(int vecsize, double* Avals, int* Acols, double* xsol, double* rhs)
 {
     for(int i = 0; i < vecsize; i++)
@@ -118,20 +115,15 @@ void cg_gpu(int vec_size, double* Avals, int* Acols, double* rhs, double* x)
     {
         r0[i] = rhs[i];
     }
-
-    #pragma acc enter data copyin(Avals[0:ROWSIZE*vec_size], Acols[0:ROWSIZE*vec_size], r0[0:vec_size], x[0:vec_size]) //----------
+    
     spmv_gpu(vec_size, ROWSIZE, Avals, Acols, x , Ax);
-    #pragma acc update device(Ax[0:vec_size])//----------
-
     axpy_gpu(vec_size, -1.0, Ax, r0);
-    #pragma acc update device(r0[0:vec_size])//----------
-
+    
     for(int i = 0; i < vec_size; i++)
     {
         p0[i] = r0[i];
     }
-
-    #pragma acc enter data copyin(Ax[0:vec_size], r0[0:vec_size], p0[0:vec_size], x[0:vec_size])//----------
+    
     for(int k = 0; k < iterations; k++) 
     {
         spmv_gpu(vec_size, ROWSIZE, Avals, Acols, p0 , Ax);
@@ -155,8 +147,7 @@ void cg_gpu(int vec_size, double* Avals, int* Acols, double* rhs, double* x)
         for(int i = 0; i < vec_size; i++)
             p0[i] = r0[i] + beta*p0[i];
     }
-    #pragma acc exit data copyout(x[0:vec_size])//----------
-
+    
     free(Ax);
     free(r0);
     free(p0);
@@ -187,11 +178,11 @@ int main()
     fill_matrix(Avals, Acols);
     create_solution_and_rhs(vec_size, Avals, Acols, x_sol, rhs);
 
+    #pragma acc enter data copyin(Avals[0:ROWSIZE * vec_size], Acols[0:ROWSIZE * vec_size], rhs[0:vec_size], x_gpu[0:vec_size])
     time_start = omp_get_wtime();
-    
     cg_gpu(vec_size, Avals, Acols, rhs, x_gpu);
-
     time_gpu = omp_get_wtime() - time_start;
+    #pragma acc exit data copyout(x_gpu[0:vec_size])
 
     // compare gpu solution with real solution
     double norm2 = 0.0;
