@@ -5,12 +5,22 @@
 
 double dot_product_cpu(int n, double* x, double* y)
 {
-
+    double dot = 0.0;
+    for (int i=0; i<n; i++){
+        dot += x[i] * y[i];
+    }
+    return dot;
 }
 
 double dot_product_gpu(int n, double* x, double* y)
 {
-
+    double dot = 0.0;
+    #pragma acc parallel loop present(x[0:n], y[0:n]) reduction(+:dot) //l'etiqueta reduction s'utilitza per acumular resultats
+                                                                       //de diferents threads en una variable comuna de manera seugra
+    for (int i=0; i<n; i++){
+        dot += x[i] * y[i];
+    }
+    return dot;
 }
 
 
@@ -40,13 +50,15 @@ int main(int argc, char **argv)
     time_end = omp_get_wtime();
     time_cpu = time_end - time_start;
 
-
+    
+    #pragma acc enter data copyin(x[0:vec_size], y[0:vec_size])
     time_start = omp_get_wtime();
-
     for(int i = 0; i < 100; i++)
         dot_gpu = dot_product_gpu(vec_size, x, y);
-
     time_end = omp_get_wtime();
+    #pragma acc exit data copyout(y[0:vec_size])
+
+
     time_gpu = time_end - time_start;
 
 
