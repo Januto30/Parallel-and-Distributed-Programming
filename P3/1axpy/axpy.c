@@ -13,7 +13,7 @@ void axpy_cpu(int n, double alpha, double* x, double* y)
 
 void axpy_gpu(int n, double alpha, double* x, double* y)
 {
-    #pragma acc parallel loop present(x[0:n], y[0:n])
+    #pragma acc parallel loop present(x[0:n], y[0:n]) 
     for (int i = 0; i < n; i++)
     {
         y[i] = alpha * x[i] + y[i];
