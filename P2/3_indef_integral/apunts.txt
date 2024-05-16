@@ -1,8 +1,0 @@
-Tenim punts on primer s'ha de distribuir les dades. En MPI cada procés te la memòria separada adiferencia de OpenMPI (on tota està junta.)
-Calcularem cada integral en el seu processador
-
-El primer cas suposem que el primer punt de cada processador és 0. És a dir, farem integrals parcials. I finalment el sumatori
-de totes. Del N total, el distribueixo en tants subs N com processos tinc. Per tant tindrem N intervals però N+1 punts.
-
-Hem d'utilitzar MPI_File_write_at pel paral·lel escriure en binari per més endavant obrir-ho amb el de python.
-En offset de 0 és 0, el offset de 1 és N^0, el de 2 és N^0 + N*1.
