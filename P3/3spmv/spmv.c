@@ -34,6 +34,18 @@ void spmv_gpu(int m, int r, double* vals, int* cols, double* x, double* y){
     }
 }
 
+void spmv_gpu(int m, int r, double* vals, int* cols, double* x, double* y) {
+    #pragma acc parallel loop present(vals[0:m*r], cols[0:m*r], x[0:m], y[0:m])
+    for (int i = 0; i < m; i++) {
+        double sum = 0.0;  // variable per emmagatzemar la reducció
+        #pragma acc loop reduction(+:sum)  
+        for (int j = 0; j < r; j++) {
+            sum += vals[j + i*r] * x[cols[j + i*r]];
+        }
+        y[i] = sum;  // assignem el resultat de la reducció a y[i]
+    }
+}
+
 void fill_matrix(double* vals, int* cols)
 {
 
