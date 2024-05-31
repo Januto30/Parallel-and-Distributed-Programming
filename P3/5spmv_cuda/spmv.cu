@@ -10,14 +10,32 @@
 
 __global__ void cuspmv(int m, int r, double* dvals, int *dcols, double* dx, double *dy)
 {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
 
-
+    for (int i = tid; i < m; i += stride)
+    {
+        double sum = 0.0;
+        for (int j = 0; j < r; j++)
+        {
+            sum += dvals[j + i * r] * dx[dcols[j + i * r]];
+        }
+        dy[i] = sum;
+    }
 }
 
 
 void spmv_cpu(int m, int r, double* vals, int* cols, double* x, double* y)
 {
-
+    for(int i = 0; i < m; i++)
+    {
+        double sum = 0.0;
+        for(int j = 0; j < r; j++)
+        {
+            sum += vals[j + i*r]*x[cols[j + i*r]];
+        }
+        y[i] = sum;
+    }
 }
 
 
@@ -112,15 +130,25 @@ int main()
 
 
     // allocate arrays in GPU
+    cudaMalloc((void**)&dx, vec_size*sizeof(double));
+    cudaMalloc((void**)&dy_gpu, vec_size*sizeof(double));
+    cudaMalloc((void**)&dAvals, ROWSIZE*vec_size*sizeof(double));
+    cudaMalloc((void**)&dAcols, ROWSIZE*vec_size*sizeof(int));
 
     // transfer data to GPU
+    cudaMemcpy(dx, x, vec_size*sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(dAvals, Avals, ROWSIZE*vec_size*sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(dAcols, Acols, ROWSIZE*vec_size*sizeof(int), cudaMemcpyHostToDevice);
 
     // calculate threads and blocks
+    int numBlocks = (vec_size + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+    dim3 gridBlock(numBlocks, 1, 1);
+    dim3 threadBlock(THREADS_PER_BLOCK, 1, 1);
 
-    // create the gridBlock
 
     for( int i=0; i<100; i++){
         // call your GPU kernel here
+        cuspmv<<<gridBlock, threadBlock>>>(vec_size, ROWSIZE, dAvals, dAcols, dx, dy_gpu);
     }
 
     cudaEventRecord(stop);
@@ -128,8 +156,13 @@ int main()
     cudaEventElapsedTime(&time_gpu, start, stop);
 
     // transfer result to CPU RAM
-
+    cudaMemcpy(y_gpu, dy_gpu, vec_size*sizeof(double), cudaMemcpyDeviceToHost);
+    
     // free arrays in GPU
+    cudaFree(dx);
+    cudaFree(dy_gpu);
+    cudaFree(dAvals);
+    cudaFree(dAcols);
 
 
     // comparison between gpu and cpu results
