@@ -109,8 +109,6 @@ void create_solution_and_rhs(int vecsize, double* Avals, int* Acols, double* xso
 
 void cg_gpu(int vec_size, double* Avals, int* Acols, double* rhs, double* x)
 
-//#pragma acc data copyin(Avals[0:ROWSIZE*vec_size], Acols[0:ROWSIZE*vec_size], rhs[0:vec_size]) \
-                    copy(x[0:vec_size]) create(r0[0:vec_size], p0[0:vec_size], Ax[0:vec_size])
 {
     int iterations= 500;
 
@@ -119,51 +117,55 @@ void cg_gpu(int vec_size, double* Avals, int* Acols, double* rhs, double* x)
     double* Ax = (double*) malloc (vec_size*sizeof(double));
     double* r0 = (double*) malloc (vec_size*sizeof(double));
     double* p0 = (double*) malloc (vec_size*sizeof(double));
-
-    for(int i = 0; i < vec_size; i++)
+    
     {
-        r0[i] = rhs[i];
-    }
 
-    spmv_gpu(vec_size, ROWSIZE, Avals, Acols, x , Ax);
+        for(int i = 0; i < vec_size; i++)
+        {
+            r0[i] = rhs[i];
+        }
 
-    axpy_gpu(vec_size, -1.0, Ax, r0);
+        spmv_gpu(vec_size, ROWSIZE, Avals, Acols, x , Ax);
 
-    #pragma acc parallel loop present(r0[0:vec_size], p0[0:vec_size])
-    for(int i = 0; i < vec_size; i++)
-    {
-        p0[i] = r0[i];
-    }
-
-
-    for(int k = 0; k < iterations; k++) 
-    {
-        spmv_gpu(vec_size, ROWSIZE, Avals, Acols, p0 , Ax);
- 
-        rho0 = dot_product_gpu(vec_size, r0, r0);
-        denom = dot_product_gpu(vec_size, p0, Ax);
-
-        alpha = rho0/denom;
-
-        axpy_gpu(vec_size, alpha, p0, x);
-
-        axpy_gpu(vec_size, -1.0*alpha, Ax, r0);
-
-        rho1 = dot_product_gpu(vec_size, r0, r0);
-
-        if(k % 20 == 0)
-            printf("Iteration %d, residual %e\n", k, rho1);
-
-        beta = rho1/rho0;
+        axpy_gpu(vec_size, -1.0, Ax, r0);
 
         #pragma acc parallel loop present(r0[0:vec_size], p0[0:vec_size])
         for(int i = 0; i < vec_size; i++)
-            p0[i] = r0[i] + beta*p0[i];
+        {
+            p0[i] = r0[i];
+        }
+
+
+        for(int k = 0; k < iterations; k++) 
+        {
+            spmv_gpu(vec_size, ROWSIZE, Avals, Acols, p0 , Ax);
+    
+            rho0 = dot_product_gpu(vec_size, r0, r0);
+            denom = dot_product_gpu(vec_size, p0, Ax);
+
+            alpha = rho0/denom;
+
+            axpy_gpu(vec_size, alpha, p0, x);
+
+            axpy_gpu(vec_size, -1.0*alpha, Ax, r0);
+
+            rho1 = dot_product_gpu(vec_size, r0, r0);
+
+            if(k % 20 == 0)
+                printf("Iteration %d, residual %e\n", k, rho1);
+
+            beta = rho1/rho0;
+
+            #pragma acc parallel loop present(r0[0:vec_size], p0[0:vec_size])
+            for(int i = 0; i < vec_size; i++)
+                p0[i] = r0[i] + beta*p0[i];
+        }
+
     }
 
-    free(Ax);
-    free(r0);
-    free(p0);
+        free(Ax);
+        free(r0);
+        free(p0);
 }
 
 
