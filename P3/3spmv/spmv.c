@@ -6,14 +6,6 @@
 #define N 1024    // number of matrix rows will be N*N
 #define ROWSIZE 9 // number of nonzero cols of sparse matrix
 
-//m     -> número de files = vec_size
-//r     -> número de non-zeros per fila = ROWSIZE
-//vals  -> emmagatzemem els valors que són non-zero = Avals
-//cols  -> emmagatzemem els índex dels non-zero = Acols
-//x     -> input array amb n components = x
-//y     -> output array amb m components = y_cpu
-//n     -> número de columnes
-
 void spmv_cpu(int m, int r, double* vals, int* cols, double* x, double* y)
 {
     for(int i = 0; i < m; i++) {
@@ -27,24 +19,15 @@ void spmv_cpu(int m, int r, double* vals, int* cols, double* x, double* y)
 void spmv_gpu(int m, int r, double* vals, int* cols, double* x, double* y){
     #pragma acc parallel loop present(vals[0:m*r], cols[0:m*r], x[0:m], y[0:m])
     for(int i = 0; i < m; i++) {
-        y[i] = 0.0;   
+        double sum = 0.0;
+        #pragma acc loop seq reduction(+:sum)
         for(int j = 0; j < r; j++){
-            y[i] += vals[j + i*r]*x[cols[j + i*r]]; // (j + i*r) calcula l'index del element (si no s'enten fer a paper per veure que si funciona)
+            sum += vals[j + i*r]*x[cols[j + i*r]];
         }
+        y[i] = sum;
     }
 }
 
-void spmv_gpu(int m, int r, double* vals, int* cols, double* x, double* y) {
-    #pragma acc parallel loop present(vals[0:m*r], cols[0:m*r], x[0:m], y[0:m])
-    for (int i = 0; i < m; i++) {
-        double sum = 0.0;  // variable per emmagatzemar la reducció
-        #pragma acc loop reduction(+:sum)  
-        for (int j = 0; j < r; j++) {
-            sum += vals[j + i*r] * x[cols[j + i*r]];
-        }
-        y[i] = sum;  // assignem el resultat de la reducció a y[i]
-    }
-}
 
 void fill_matrix(double* vals, int* cols)
 {

@@ -164,7 +164,6 @@ int main()
         rhs[i] = 0.0;
     }
 
-    // define a problem to test the cg code
     fill_matrix(Avals, Acols);
     create_solution_and_rhs(vec_size, Avals, Acols, x_sol, rhs);
 
@@ -174,7 +173,6 @@ int main()
 
     time_cpu = omp_get_wtime() - time_start;
    
-    // compare cpu solution with real solution
     double norm2 = 0.0;
     for(int i = 0; i < vec_size; i++)
         norm2 += (x_cpu[i] - x_sol[i])*(x_cpu[i] - x_sol[i]);

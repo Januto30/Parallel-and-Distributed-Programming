@@ -10,37 +10,37 @@
 void spmv_cpu(int m, int r, double* vals, int* cols, double* x, double* y)
 {
     for(int i = 0; i < m; i++) {
-    y[i] = 0.0;   
+        y[i] = 0.0;   
         for(int j = 0; j < r; j++){
             y[i] += vals[j + i*r]*x[cols[j + i*r]];
         }
     }
 }
 
-void spmv_gpu(int m, int r, double* vals, int* cols, double* x, double* y)
-{
+void spmv_gpu(int m, int r, double* vals, int* cols, double* x, double* y){
     #pragma acc parallel loop present(vals[0:m*r], cols[0:m*r], x[0:m], y[0:m])
     for(int i = 0; i < m; i++) {
-        y[i] = 0.0;   
+        double sum = 0.0;
+        #pragma acc loop seq reduction(+:sum)
         for(int j = 0; j < r; j++){
-            y[i] += vals[j + i*r]*x[cols[j + i*r]]; // (j + i*r) calcula l'index del element (si no s'enten fer a paper per veure que si funciona)
+            sum += vals[j + i*r]*x[cols[j + i*r]];
         }
+        y[i] = sum;
     }
 }
-
 void axpy_gpu(int n, double alpha, double* x, double* y)
 {
-    #pragma acc parallel loop present(x[0:n], y[0:n])
-    for(int i = 0; i < n; i++){
-        y[i] += alpha*x[i];
+    #pragma acc parallel loop present(x[0:n], y[0:n]) 
+    for (int i = 0; i < n; i++)
+    {
+        y[i] = alpha * x[i] + y[i];
     }
 }
 
 double dot_product_gpu(int n, double* x, double* y)
 {
     double dot = 0.0;
-    #pragma acc parallel loop present(x[0:n], y[0:n]) reduction(+:dot) //l'etiqueta reduction s'utilitza per acumular resultats
-                                                                       //de diferents threads en una variable comuna de manera seugra
+    #pragma acc parallel loop present(x[0:n], y[0:n]) reduction(+:dot) 
     for (int i=0; i<n; i++){
         dot += x[i] * y[i];
     }
@@ -97,6 +97,7 @@ void fill_matrix(double* vals, int* cols)
 
 void create_solution_and_rhs(int vecsize, double* Avals, int* Acols, double* xsol, double* rhs)
 {
+
     for(int i = 0; i < vecsize; i++)
         xsol[i] = sin(i*0.1) + cos(i*0.01);
 
@@ -113,25 +114,26 @@ void cg_gpu(int vec_size, double* Avals, int* Acols, double* rhs, double* x)
     double* Ax = (double*) malloc (vec_size*sizeof(double));
     double* r0 = (double*) malloc (vec_size*sizeof(double));
     double* p0 = (double*) malloc (vec_size*sizeof(double));
-
+    
+    #pragma acc enter data copyin(Avals[0:vec_size*ROWSIZE], Acols[0:vec_size*ROWSIZE], x[0:vec_size], rhs[0:vec_size], Ax[0:vec_size], r0[0:vec_size], p0[0:vec_size])
+    
+    #pragma acc parallel loop present(r0[0 : vec_size], rhs[0 : vec_size])
     for(int i = 0; i < vec_size; i++)
     {
         r0[i] = rhs[i];
     }
 
-    #pragma acc enter data copyin(Avals[0:ROWSIZE*vec_size], Acols[0:ROWSIZE*vec_size], r0[0:vec_size], x[0:vec_size]) //----------
     spmv_gpu(vec_size, ROWSIZE, Avals, Acols, x , Ax);
-    #pragma acc update device(Ax[0:vec_size])//----------
 
     axpy_gpu(vec_size, -1.0, Ax, r0);
-    #pragma acc update device(r0[0:vec_size])//----------
 
+    #pragma acc parallel loop present(r0[0 : vec_size], p0[0 : vec_size])
     for(int i = 0; i < vec_size; i++)
     {
         p0[i] = r0[i];
     }
 
-    #pragma acc enter data copyin(Ax[0:vec_size], r0[0:vec_size], p0[0:vec_size], x[0:vec_size])//----------
+
     for(int k = 0; k < iterations; k++) 
     {
         spmv_gpu(vec_size, ROWSIZE, Avals, Acols, p0 , Ax);
@@ -152,17 +154,17 @@ void cg_gpu(int vec_size, double* Avals, int* Acols, double* rhs, double* x)
 
         beta = rho1/rho0;
 
+        #pragma acc parallel loop present(r0[0 : vec_size], p0[0 : vec_size])
         for(int i = 0; i < vec_size; i++)
             p0[i] = r0[i] + beta*p0[i];
+        
     }
-    #pragma acc exit data copyout(x[0:vec_size])//----------
 
+    #pragma acc exit data copyout(x[0:vec_size] , r0[0:vec_size], p0[0:vec_size]) 
     free(Ax);
     free(r0);
     free(p0);
 }
-
-
 
 int main()
 {
@@ -183,17 +185,15 @@ int main()
         rhs[i] = 0.0;
     }
 
-    // define a problem to test the cg code
     fill_matrix(Avals, Acols);
     create_solution_and_rhs(vec_size, Avals, Acols, x_sol, rhs);
 
     time_start = omp_get_wtime();
-    
+
     cg_gpu(vec_size, Avals, Acols, rhs, x_gpu);
 
     time_gpu = omp_get_wtime() - time_start;
 
-    // compare gpu solution with real solution
     double norm2 = 0.0;
     for(int i = 0; i < vec_size; i++)
         norm2 += (x_gpu[i] - x_sol[i])*(x_gpu[i] - x_sol[i]);
@@ -208,3 +208,4 @@ int main()
     free(Avals);
     free(Acols);
 }
+
