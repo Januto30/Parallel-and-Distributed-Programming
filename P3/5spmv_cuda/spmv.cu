@@ -8,34 +8,34 @@
 #define THREADS_PER_BLOCK 128
 
 
+
 __global__ void cuspmv(int m, int r, double* dvals, int *dcols, double* dx, double *dy)
 {
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    int stride = blockDim.x * gridDim.x;
-
-    for (int i = tid; i < m; i += stride)
+    int row = blockIdx.x*blockDim.x + threadIdx.x;
+    if(row < m)
     {
-        double sum = 0.0;
-        for (int j = 0; j < r; j++)
+        double dot = 0.0;
+        for(int j = 0; j < r; j++)
         {
-            sum += dvals[j + i * r] * dx[dcols[j + i * r]];
+            dot += dvals[row*r + j]*dx[dcols[j + row*r]];
         }
-        dy[i] = sum;
+        dy[row] = dot;
+
     }
+
 }
+
 
 
 void spmv_cpu(int m, int r, double* vals, int* cols, double* x, double* y)
 {
-    for(int i = 0; i < m; i++)
-    {
-        double sum = 0.0;
-        for(int j = 0; j < r; j++)
-        {
-            sum += vals[j + i*r]*x[cols[j + i*r]];
+    for(int i = 0; i < m; i++) {
+        y[i] = 0.0;   
+        for(int j = 0; j < r; j++){
+            y[i] += vals[j + i*r]*x[cols[j + i*r]]; // (j + i*r) calcula l'index del element (si no s'enten fer a paper per veure que si funciona)
         }
-        y[i] = sum;
     }
+
 }
 
 
@@ -130,39 +130,45 @@ int main()
 
 
     // allocate arrays in GPU
-    cudaMalloc((void**)&dx, vec_size*sizeof(double));
-    cudaMalloc((void**)&dy_gpu, vec_size*sizeof(double));
-    cudaMalloc((void**)&dAvals, ROWSIZE*vec_size*sizeof(double));
-    cudaMalloc((void**)&dAcols, ROWSIZE*vec_size*sizeof(int));
+    cudaMalloc(&dAvals, ROWSIZE*vec_size*sizeof(double));
+    cudaMalloc(&dAcols, ROWSIZE*vec_size*sizeof(int));
+    cudaMalloc(&dx, vec_size*sizeof(double));
+    cudaMalloc(&dy_gpu, vec_size*sizeof(double));
 
     // transfer data to GPU
-    cudaMemcpy(dx, x, vec_size*sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(dAvals, Avals, ROWSIZE*vec_size*sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(dAcols, Acols, ROWSIZE*vec_size*sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(dAvals, Avals, vec_size * ROWSIZE * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(dAcols, Acols, vec_size* ROWSIZE * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(dx, x, vec_size * sizeof(double), cudaMemcpyHostToDevice);
+
 
     // calculate threads and blocks
-    int numBlocks = (vec_size + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-    dim3 gridBlock(numBlocks, 1, 1);
-    dim3 threadBlock(THREADS_PER_BLOCK, 1, 1);
+    int threadsPerBlock = THREADS_PER_BLOCK;
 
+
+    // create the gridBlock
+    int blocksPerGrid = (vec_size + threadsPerBlock - 1) / threadsPerBlock;
+    
+    cudaEventRecord(start);
 
     for( int i=0; i<100; i++){
         // call your GPU kernel here
-        cuspmv<<<gridBlock, threadBlock>>>(vec_size, ROWSIZE, dAvals, dAcols, dx, dy_gpu);
+        cuspmv<<<blocksPerGrid, threadsPerBlock>>>(vec_size, ROWSIZE, dAvals, dAcols, dx, dy_gpu);
+    
     }
+    
 
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time_gpu, start, stop);
 
     // transfer result to CPU RAM
-    cudaMemcpy(y_gpu, dy_gpu, vec_size*sizeof(double), cudaMemcpyDeviceToHost);
-    
+    cudaMemcpy(y_gpu, dy_gpu, vec_size * sizeof(double), cudaMemcpyDeviceToHost);
+
     // free arrays in GPU
-    cudaFree(dx);
-    cudaFree(dy_gpu);
     cudaFree(dAvals);
     cudaFree(dAcols);
+    cudaFree(dx);
+    cudaFree(dy_gpu);
 
 
     // comparison between gpu and cpu results
