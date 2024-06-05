@@ -11,13 +11,13 @@
 
 __global__ void cuspmv(int m, int r, double* dvals, int *dcols, double* dx, double *dy)
 {
-    int row = blockIdx.x*blockDim.x + threadIdx.x;
-    if(row < m)
+    int row = blockIdx.x*blockDim.x + threadIdx.x; // Identificar l'index de la fila
+    if(row < m) //Entrem si la fila es troba dins del rang de m, es a dir, si la fila es troba dins de la matriu.
     {
         double dot = 0.0;
-        for(int j = 0; j < r; j++)
+        for(int j = 0; j < r; j++) // Calculem el producte escalar
         {
-            dot += dvals[row*r + j]*dx[dcols[j + row*r]];
+            dot += dvals[row*r + j]*dx[dcols[j + row*r]]; //(row*r + j) calcula l'index de la matriu 
         }
         dy[row] = dot;
 
