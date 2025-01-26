@@ -2,7 +2,7 @@
 
 This repository contains projects and assignments focused on parallel and distributed programming concepts. By leveraging multi-threading, parallel computation, and distributed systems, it demonstrates how to solve computational problems more efficiently.
 
-### Key Features:
+## What's Inside?  
 - Implementation of parallel algorithms for high-performance computing.
 - Exploration of distributed system architectures and communication.
 - Optimization techniques for resource management and task distribution.
